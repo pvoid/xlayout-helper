@@ -9,6 +9,7 @@
 #include <X11/Xatom.h>
 
 #include <string>
+#include <optional>
 
 namespace com::github::pvoid::layouthelper {
 
@@ -20,9 +21,9 @@ class xdisplay_ref_t;
 class xatom_ref_t {
     friend class xwindow_ref_t;
 public:
-    operator std::string() const {
-        if (atom_ == None) {
-            return "";
+    operator std::optional<std::string>() const {
+        if (atom_ == None || window_ == None || display_ == nullptr) {
+            return {};
         }
         
         Atom actual_type;
@@ -34,7 +35,7 @@ public:
             &actual_type, &actual_format, &items, &size, value.ref());
 
         if (status != Success || (actual_type != XA_STRING && actual_type != XA_UTF8_STRING)) {
-            return "";
+            return {};
         }
 
         std::string result;
@@ -43,9 +44,9 @@ public:
         return result;
     }
 
-    operator u_int64_t() const {
-        if (atom_ == None) {
-            return 0;
+    operator std::optional<u_int64_t>() const {
+        if (atom_ == None || window_ == None || display_ == nullptr) {
+            return {};
         }
 
         Atom actual_type;
@@ -57,7 +58,7 @@ public:
             &actual_type, &actual_format, &items, &size, value.ref());
 
         if (status != Success || actual_type != XA_CARDINAL || items != 1) {
-            return 0;
+            return {};
         }
 
         if (actual_format == 32) {
@@ -66,7 +67,7 @@ public:
             return result;
         }
 
-        return 0;
+        return {};
     }
 private:
     xatom_ref_t(Display* display, Window window, const char* name) : display_(display), window_(window), atom_(None) {

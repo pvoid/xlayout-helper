@@ -42,11 +42,15 @@ public:
         return xwindow_ref_t(display_, DefaultRootWindow(display_)); 
     }
 
-    xwindow_ref_t focus_window() const { 
+    std::optional<xwindow_ref_t> focus_window() const { 
         Window focus;
         int revert;
 
         XGetInputFocus(display_, &focus, &revert);
+
+        if (focus == None) {
+            return {};
+        }
 
         return xwindow_ref_t(display_, focus);
     }

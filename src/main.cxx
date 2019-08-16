@@ -9,6 +9,8 @@
 #include <iostream>
 #include <iomanip>
 #include <cstring>
+#include <thread>
+#include <chrono>
 
 #include "xdisplay_ref.h"
 #include "layouts_holder.h"
@@ -16,11 +18,21 @@
 using com::github::pvoid::layouthelper::xref_t;
 using com::github::pvoid::layouthelper::xatom_ref_t;
 using com::github::pvoid::layouthelper::xdisplay_ref_t;
+using com::github::pvoid::layouthelper::xwindow_ref_t;
 using com::github::pvoid::layouthelper::layouts_holder_t;
 
-volatile sig_atomic_t do_work = true;
+int xerror_handler(Display* display, XErrorEvent* event) {
+    static char buffer[1024];
+    if (event) {
+        XGetErrorText(display, event->error_code, buffer, sizeof(buffer));
+        std::cout << "Error event: " << buffer << std::endl;
+    }
+    return 0;
+}
 
 int main(int argc, char** argv) {
+    XSetErrorHandler(&xerror_handler);
+    
     xdisplay_ref_t display;
 
     int kb_event_type = display.fetch_kb_event_type();
@@ -30,9 +42,13 @@ int main(int argc, char** argv) {
 
     layouts_holder_t layout_holder;
 
-    while(do_work) {
+    for(;;) {
         auto focus = display.focus_window();
-        focus.listen_keyboard_layout(kb_event_type, layout_holder);
+        if (focus) {
+            focus->listen_keyboard_layout(kb_event_type, layout_holder);
+        } else {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
     }
 
     return 0;

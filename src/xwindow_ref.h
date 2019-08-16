@@ -28,28 +28,42 @@ public:
 
     operator Window() const { return window_; }
 
-    std::string title() const { return title_prop_; }
-    u_int64_t pid() const { return pid_prop_; }
+    std::optional<std::string> title() const { 
+        if (window_ == None) {
+            return {};
+        }
+        
+        return title_prop_;
+    }
+    
+    std::optional<u_int64_t> pid() const { 
+        if (window_ == None) {
+            return {};
+        }
+
+        return pid_prop_; 
+    }
+
+    bool operator==(const xwindow_ref_t& src) const {
+        return display_ == src.display_ && window_ == src.window_;
+    }
 
     void listen_keyboard_layout(int xkb_event, layouts_holder_t& holder) {
-        u_int64_t pid = pid_prop_;
+        std::optional<u_int64_t> pid = pid_prop_;
 
-        std::cout << "Enter window: \"" << title() << "\" PID: " << pid;
+        if (pid) {
+            // Try to change layoyt if we have saved one
+            auto restored = holder.get_layout_for_process(*pid);
+            int layout;
+            if (restored.has_value()) {
+                layout = restored.value();
+            } else {
+                layout = holder.last();
+                holder.save_layout_for_process(*pid, layout);
+            }
 
-        // Try to change layoyt if we have saved one
-        auto restored = holder.get_layout_for_process(pid);
-        int layout;
-        if (restored.has_value()) {
-            layout = restored.value();
-            std::cout << " restore: " << layout;
-        } else {
-            layout = holder.last();
-            holder.save_layout_for_process(pid, layout);
-            std::cout << " fallback to last layout: " << layout;
+            XkbLockGroup(display_, XkbUseCoreKbd, layout);
         }
-        std::cout << std::endl;
-
-        XkbLockGroup(display_, XkbUseCoreKbd, layout);
 
         // Listen focus
         XSelectInput(display_, window_, FocusChangeMask);
@@ -59,13 +73,13 @@ public:
             // Grab next event
             XNextEvent(display_, &event);
 
-            if (event.type == xkb_event) {
+            if (event.type == xkb_event && pid != 0) {
                 XkbEvent* keyboard_event = reinterpret_cast<XkbEvent*>(&event);
                 if (keyboard_event->any.xkb_type == XkbStateNotify) {
                     int lang = keyboard_event->state.group;
-                    holder.save_layout_for_process(pid, lang);
-
-                    std::cout << "Enter window: \"" << title() << "\" PID: " << pid << " new layout: " << lang << std::endl;
+                    if (pid) {
+                        holder.save_layout_for_process(*pid, lang);
+                    }
                 }
                 continue;
             }
@@ -75,7 +89,6 @@ public:
             }
         }
     }
-
 private:
     xwindow_ref_t(Display* display, Window window) : display_(display), window_(window), title_prop_(display, window, WINDOW_TITLE_PROP), pid_prop_(display, window, WINDOW_PROCESS_ID) {}
 private:
